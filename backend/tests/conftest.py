@@ -21,6 +21,8 @@ from app.config import get_settings
 # Tests must never pick up a developer's real provider from .env.
 os.environ["LLM_PROVIDER"] = "fake"
 os.environ["EMBED_PROVIDER"] = "fake"
+# The fake hashed embeddings give lower similarities than a real model.
+os.environ["RAG_MIN_SIMILARITY"] = "0.2"
 get_settings.cache_clear()
 
 

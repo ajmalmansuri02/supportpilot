@@ -1,25 +1,33 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { ChatEvent, Mode, getHealth, streamChat } from "@/lib/api";
+import { ChatEvent, Mode, Source, getHealth, streamChat } from "@/lib/api";
 import styles from "./page.module.css";
 
 type Message = {
   role: "user" | "assistant";
   text: string;
   error?: string;
+  sources?: Source[];
+  query?: string;
 };
 
 const MODES: { value: Mode; label: string; hint: string }[] = [
-  { value: "chat", label: "Chat", hint: "Plain LLM conversation with memory" },
+  { value: "rag", label: "Docs (RAG)", hint: "Answers from the CloudNotes docs with citations" },
+  { value: "chat", label: "Plain chat", hint: "Plain LLM conversation with memory, no documents" },
 ];
 
-const EXAMPLES = ["Hi! What can you help me with?", "Write a haiku about taking notes."];
+const EXAMPLES = [
+  "How much does the Pro plan cost?",
+  "I was charged twice this month. Can I get a refund?",
+  "How do I turn on two-factor authentication?",
+  "Is there a Linux desktop app?",
+];
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<Mode>("chat");
+  const [mode, setMode] = useState<Mode>("rag");
   const [busy, setBusy] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [health, setHealth] = useState<string>("connecting…");
@@ -41,6 +49,9 @@ export default function Home() {
     switch (event.type) {
       case "meta":
         setConversationId(event.conversation_id);
+        break;
+      case "sources":
+        updateLast((m) => ({ ...m, sources: event.sources, query: event.query }));
         break;
       case "token":
         updateLast((m) => ({ ...m, text: m.text + event.text }));
@@ -117,6 +128,23 @@ export default function Home() {
             <div className={styles.bubble}>
               {m.text || (busy && i === messages.length - 1 ? <span className={styles.typing}>…</span> : null)}
               {m.error && <p className={styles.error}>{m.error}</p>}
+              {m.sources && m.sources.length > 0 && (
+                <details className={styles.sources}>
+                  <summary>
+                    {m.sources.length} sources
+                    {m.query ? ` · searched for “${m.query}”` : ""}
+                  </summary>
+                  <ol>
+                    {m.sources.map((s) => (
+                      <li key={s.n}>
+                        <strong>[{s.n}] {s.heading}</strong>{" "}
+                        <span className={styles.muted}>({s.source})</span>
+                        <p>{s.content}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              )}
             </div>
           </div>
         ))}

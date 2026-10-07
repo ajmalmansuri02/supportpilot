@@ -3,10 +3,13 @@
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-export type Mode = "chat";
+export type Mode = "chat" | "rag";
+
+export type Source = { n: number; source: string; heading: string; content: string; score: number };
 
 export type ChatEvent =
   | { type: "meta"; conversation_id: string; mode: Mode }
+  | { type: "sources"; query: string; sources: Source[] }
   | { type: "token"; text: string }
   | { type: "done"; prompt_version?: number }
   | { type: "error"; message: string };

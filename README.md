@@ -11,7 +11,7 @@ Everything runs **locally and for free**.
 | Phase | Weeks | What it adds | Status |
 | --- | --- | --- | --- |
 | 1. LLM APIs and prompting | 1–2 | Streaming chat, provider switch, structured output, memory | ✅ |
-| 2. RAG and evals | 3–5 | Doc search with pgvector, hybrid search, reranking, eval suite | ⏳ |
+| 2. RAG and evals | 3–5 | Doc search with pgvector, hybrid search, reranking, eval suite | ✅ |
 | 3. Agents and MCP | 6–8 | Tool-calling agent, LangGraph, MCP ticket server | ⏳ |
 | 4. Production | 9–10 | Tracing, cost tracking, caching, guardrails, red-team evals | ⏳ |
 | 5. Fine-tuning and cloud | 11–12 | Fine-tuned router, deploy to a managed AI platform | ⏳ |
@@ -23,7 +23,12 @@ See [LEARNING.md](LEARNING.md) for what each part teaches and where to find it i
 ```
 Next.js chat UI  ──SSE──▶  FastAPI backend  ──▶  LLM (Ollama / Gemini / any OpenAI-compatible)
  (frontend/)               (backend/app/)    ──▶  Postgres + pgvector (memory, docs, tickets)
+                                             ──▶  data/docs/*.md  (the CloudNotes help centre)
 ```
+
+The knowledge base is 15 Markdown help-centre pages in `data/docs/`. On first start the
+backend loads them automatically. After editing them, run
+`uv run python -m app.rag.ingest` to re-index (only changed files are re-embedded).
 
 ## Prerequisites
 
@@ -79,13 +84,16 @@ docker compose up -d db
 cd backend && uv run pytest -q     # uses the offline fake model, no Ollama needed
 ```
 
-CI runs the same tests plus a frontend build on every pull request.
+CI runs the same tests, the RAG eval regression gate and a frontend build on every pull
+request. See [evals/README.md](evals/README.md) for running evals with your real model.
 
 ## API
 
 | Method | Path | What it does |
 | --- | --- | --- |
 | GET | `/api/health` | Shows which provider and models are active |
-| POST | `/api/chat` | `{message, conversation_id?, mode}` → Server-Sent Events stream |
+| POST | `/api/chat` | `{message, conversation_id?, mode: "rag" \| "chat"}` → Server-Sent Events stream |
+| POST | `/api/answer` | `{question}` → `{answer, sources}` without memory (used by evals) |
+| GET | `/api/search?q=...&mode=hybrid` | Shows exactly which chunks a question retrieves |
 | POST | `/api/classify` | `{message}` → `{category, priority, sentiment}` as validated JSON |
 | GET | `/api/conversations/{id}` | Full conversation, including the rolling summary |
