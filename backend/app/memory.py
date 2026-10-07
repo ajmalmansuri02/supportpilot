@@ -40,6 +40,15 @@ async def add_message(conversation_id: str, role: str, content: str,
         )
 
 
+async def replace_last_assistant(conversation_id: str, content: str) -> None:
+    async with pool().connection() as conn:
+        await conn.execute(
+            "UPDATE messages SET content = %s WHERE id = (SELECT max(id) FROM messages"
+            " WHERE conversation_id = %s AND role = 'assistant')",
+            (content, conversation_id),
+        )
+
+
 async def get_conversation(conversation_id: str) -> dict[str, Any] | None:
     async with pool().connection() as conn:
         conv = await (

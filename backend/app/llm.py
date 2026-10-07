@@ -59,6 +59,9 @@ class CallRecord:
     cost_usd: float
     conversation_id: str | None = None
     error: str | None = None
+    # The prompt and reply, kept only so tracing tools (Langfuse) can show them.
+    input: list[dict[str, Any]] | None = None
+    output: str | None = None
 
 
 Listener = Callable[[CallRecord], None]
@@ -110,7 +113,8 @@ class LLMClient:
         self._listeners.append(listener)
 
     def _record(self, purpose: str, model: str, usage: Usage, started: float,
-                conversation_id: str | None, error: str | None = None) -> int:
+                conversation_id: str | None, error: str | None = None,
+                messages: list[dict[str, Any]] | None = None, output: str | None = None) -> int:
         latency_ms = int((time.perf_counter() - started) * 1000)
         cost = (
             usage.input_tokens * self.settings.price_input_per_m
@@ -120,6 +124,7 @@ class LLMClient:
             purpose=purpose, provider=self.provider, model=model,
             input_tokens=usage.input_tokens, output_tokens=usage.output_tokens,
             latency_ms=latency_ms, cost_usd=cost, conversation_id=conversation_id, error=error,
+            input=messages, output=output,
         )
         for listener in self._listeners:
             try:
@@ -179,7 +184,9 @@ class LLMClient:
                 output_tokens=estimate_tokens(result.content),
             )
         result.model = model
-        result.latency_ms = self._record(purpose, model, result.usage, started, conversation_id)
+        output = result.content or json.dumps([c.__dict__ for c in result.tool_calls])
+        result.latency_ms = self._record(purpose, model, result.usage, started, conversation_id,
+                                         messages=messages, output=output)
         return result
 
     async def stream(
@@ -226,7 +233,8 @@ class LLMClient:
                 input_tokens=estimate_tokens(json.dumps(messages)),
                 output_tokens=estimate_tokens("".join(parts)),
             )
-        self._record(purpose, model, usage, started, conversation_id)
+        self._record(purpose, model, usage, started, conversation_id,
+                     messages=messages, output="".join(parts))
 
     # -- embeddings ------------------------------------------------------------
     async def embed(self, texts: list[str], *, kind: str = "query",

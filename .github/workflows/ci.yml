@@ -44,6 +44,11 @@ jobs:
         env:
           RAG_MIN_SIMILARITY: "0.2"
         run: uv run python -m app.evals.agent_eval --tag ci --baseline ../evals/baseline-fake-agent.json
+      # Week 10: 20 attacks; fails if any attack that was defended before gets through.
+      - name: Red-team eval regression gate
+        env:
+          RAG_MIN_SIMILARITY: "0.2"
+        run: uv run python -m app.evals.redteam_eval --tag ci --baseline ../evals/baseline-fake-redteam.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
