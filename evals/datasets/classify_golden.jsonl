@@ -1,0 +1,30 @@
+{"id": "c01", "message": "I was charged twice for Pro this month. Please refund the extra one.", "label": {"category": "billing", "priority": "high", "sentiment": "negative"}}
+{"id": "c02", "message": "How much does the Team plan cost per user if we pay yearly?", "label": {"category": "billing", "priority": "low", "sentiment": "neutral"}}
+{"id": "c03", "message": "My card got declined when renewing and now I'm on Free and can't see my notebooks!", "label": {"category": "billing", "priority": "high", "sentiment": "negative"}}
+{"id": "c04", "message": "Can I get a VAT invoice with my company name on it?", "label": {"category": "billing", "priority": "low", "sentiment": "neutral"}}
+{"id": "c05", "message": "Upgraded to Pro yesterday, smooth process, thanks!", "label": {"category": "billing", "priority": "low", "sentiment": "positive"}}
+{"id": "c06", "message": "You billed me $80 after I cancelled. This is theft.", "label": {"category": "billing", "priority": "high", "sentiment": "negative"}}
+{"id": "c07", "message": "Is there a discount if we move 40 people to Team?", "label": {"category": "billing", "priority": "low", "sentiment": "neutral"}}
+{"id": "c08", "message": "Notes I wrote on my laptop don't show up on my phone. Restarting sometimes helps.", "label": {"category": "technical", "priority": "medium", "sentiment": "negative"}}
+{"id": "c09", "message": "The app crashes every time I open it on iPad, I can't get to any of my notes", "label": {"category": "technical", "priority": "high", "sentiment": "negative"}}
+{"id": "c10", "message": "PDF export cuts off the last page of long notes.", "label": {"category": "technical", "priority": "medium", "sentiment": "neutral"}}
+{"id": "c11", "message": "Edits I made offline on the plane are gone after I reconnected. Weeks of work!!", "label": {"category": "technical", "priority": "high", "sentiment": "negative"}}
+{"id": "c12", "message": "Search is a bit slow with 5000 notes but it gets there", "label": {"category": "technical", "priority": "medium", "sentiment": "neutral"}}
+{"id": "c13", "message": "Images over 10MB fail to attach, I resize them first as a workaround", "label": {"category": "technical", "priority": "medium", "sentiment": "neutral"}}
+{"id": "c14", "message": "Whole service seems down, nothing loads for our team", "label": {"category": "technical", "priority": "high", "sentiment": "negative"}}
+{"id": "c15", "message": "I can't log in, it says my password is wrong but I just reset it", "label": {"category": "account", "priority": "high", "sentiment": "negative"}}
+{"id": "c16", "message": "How do I change the email on my account?", "label": {"category": "account", "priority": "low", "sentiment": "neutral"}}
+{"id": "c17", "message": "2FA codes stopped arriving and I'm locked out of my account", "label": {"category": "account", "priority": "high", "sentiment": "negative"}}
+{"id": "c18", "message": "Please delete my account and all my data.", "label": {"category": "account", "priority": "medium", "sentiment": "neutral"}}
+{"id": "c19", "message": "Can I have two accounts on the same phone?", "label": {"category": "account", "priority": "low", "sentiment": "neutral"}}
+{"id": "c20", "message": "Password reset email never arrives, checked spam. I can still use the app on my phone.", "label": {"category": "account", "priority": "medium", "sentiment": "negative"}}
+{"id": "c21", "message": "Would love a dark mode for late night writing!", "label": {"category": "feature_request", "priority": "low", "sentiment": "positive"}}
+{"id": "c22", "message": "Please add nested tags, my tag list is a mess", "label": {"category": "feature_request", "priority": "low", "sentiment": "neutral"}}
+{"id": "c23", "message": "A Google Calendar integration would make CloudNotes perfect for me", "label": {"category": "feature_request", "priority": "low", "sentiment": "positive"}}
+{"id": "c24", "message": "Why is there still no public API in 2026? Every competitor has one.", "label": {"category": "feature_request", "priority": "low", "sentiment": "negative"}}
+{"id": "c25", "message": "Markdown tables would be great", "label": {"category": "feature_request", "priority": "low", "sentiment": "neutral"}}
+{"id": "c26", "message": "Just wanted to say CloudNotes changed how I study. Thank you!", "label": {"category": "other", "priority": "low", "sentiment": "positive"}}
+{"id": "c27", "message": "Are you hiring frontend developers?", "label": {"category": "other", "priority": "low", "sentiment": "neutral"}}
+{"id": "c28", "message": "I'm a journalist writing about note apps, who can I talk to?", "label": {"category": "other", "priority": "low", "sentiment": "neutral"}}
+{"id": "c29", "message": "Do you offer student discounts?", "label": {"category": "billing", "priority": "low", "sentiment": "neutral"}}
+{"id": "c30", "message": "Your support never answers, I've emailed three times about my refund", "label": {"category": "billing", "priority": "high", "sentiment": "negative"}}

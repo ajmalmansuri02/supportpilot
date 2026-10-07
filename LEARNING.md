@@ -161,3 +161,35 @@ PII redaction, output checks, least-privilege tools, red-team evals.
 
 **Try:** write three new attacks that get past the regex checks, add them to `redteam.jsonl`,
 then run the eval with `GUARD_LLM=true` and see how many the small model catches.
+
+## Week 11: Fine-tuning
+
+**Concepts:** when to fine-tune vs prompt vs RAG, synthetic data and distillation, LoRA and
+QLoRA, chat templates, training only on responses, GGUF quantisation, before/after evals.
+
+| File | What to look at |
+| --- | --- |
+| `backend/app/finetune/generate.py` | A big "teacher" model writes and labels tickets for every label combination; `--verify` drops ones it labels differently on a second look. |
+| `finetune/SupportPilot_finetune.ipynb` | Unsloth LoRA training on a free Colab T4: baseline, train, re-measure, export GGUF. |
+| `finetune/Modelfile` | Turns the GGUF into an Ollama model. |
+| `backend/app/evals/classify_eval.py` + `evals/datasets/classify_golden.jsonl` | Accuracy, latency and prompt tokens on 30 hand-written tickets the generator never saw. |
+| `backend/app/classify.py` | `CLASSIFY_MODEL` / `CLASSIFY_PROMPT` swap the router without code changes. |
+
+**Try (the week 11 deliverable):** the comparison table for the prompted 3B, prompted 7B and
+your fine-tuned model, plus one paragraph on whether fine-tuning was worth it.
+
+## Week 12: A managed cloud AI platform
+
+**Concepts:** managed model endpoints, identity-based auth instead of API keys, service
+accounts and least privilege, secret management, containers on serverless, budgets.
+
+| File | What to look at |
+| --- | --- |
+| `backend/app/llm.py` (`GoogleToken`, `_authorize`) | Vertex AI through its OpenAI-compatible endpoint, with short-lived Google tokens instead of a key. |
+| `deploy/gcp/deploy.sh` | APIs, secrets, service account, Cloud Build and Cloud Run in one readable script. |
+| `backend/Dockerfile` | Built from the repo root so the docs ship in the image; listens on Cloud Run's `$PORT`. |
+| `deploy/README.md` | Budget alert first, Neon for a free pgvector database, teardown, Azure alternative. |
+
+**Try:** run the three eval suites with `LLM_PROVIDER=vertex` and add the results next to
+your Ollama numbers. Then deploy, share the URL with a friend, look at the metrics page, and
+tear it down.

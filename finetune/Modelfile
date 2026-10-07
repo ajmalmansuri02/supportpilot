@@ -1,0 +1,14 @@
+# Turns the GGUF file from the Colab notebook into an Ollama model:
+#   ollama create supportpilot-router -f Modelfile
+FROM ./supportpilot-router.gguf
+
+# Qwen2.5 chat format (ChatML). The router only ever sees one system + one user message.
+TEMPLATE """{{ if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}{{ if .Prompt }}<|im_start|>user
+{{ .Prompt }}<|im_end|>
+{{ end }}<|im_start|>assistant
+{{ .Response }}<|im_end|>
+"""
+PARAMETER stop "<|im_end|>"
+PARAMETER temperature 0

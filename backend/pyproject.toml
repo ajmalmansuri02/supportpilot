@@ -20,6 +20,7 @@ dependencies = [
 [project.optional-dependencies]
 rerank = ["sentence-transformers>=3.0"]
 tracing = ["langfuse>=4.0,<5"]
+vertex = ["google-auth[requests]>=2.30"]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.5"]
 
 [build-system]

@@ -1,0 +1,10 @@
+# Builds one image with Cloud Build (no Docker needed on your machine). Used by deploy.sh.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "${_DOCKERFILE}", "--build-arg", "NEXT_PUBLIC_API_URL=${_API_URL}",
+           "-t", "${_IMAGE}", "${_CONTEXT}"]
+images: ["${_IMAGE}"]
+substitutions:
+  _DOCKERFILE: backend/Dockerfile
+  _CONTEXT: .
+  _API_URL: ""
