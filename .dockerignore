@@ -1,0 +1,11 @@
+# Context for backend/Dockerfile (built from the repo root)
+.git
+.env
+.env.*
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+frontend
+evals/results
+finetune

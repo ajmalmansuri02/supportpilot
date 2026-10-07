@@ -22,3 +22,7 @@ evals/results/*.json
 finetune/outputs/
 
 .DS_Store
+
+# Fine-tuning outputs (generated locally / downloaded from Colab)
+finetune/data/*.jsonl
+finetune/*.gguf
