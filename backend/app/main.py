@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app import chat, db, memory
+from app import cache, chat, db, memory, observability
 from app.agent import actions
 from app.agent.registry import connect_mcp, get_registry
 from app.classify import TicketClassification, classify_ticket
@@ -36,6 +36,7 @@ log = logging.getLogger("supportpilot")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    observability.install(get_llm())
     await db.open_pool()
     await db.init_schema()
     if settings.auto_ingest:
@@ -118,7 +119,8 @@ async def chat_endpoint(req: ChatRequest):
     if not _is_uuid(conversation_id) or not await memory.conversation_exists(conversation_id):
         conversation_id = await memory.create_conversation()
 
-    handlers = {"chat": chat.simple_chat, "rag": chat.rag_chat, "agent": chat.agent_chat}
+    handlers = {"chat": chat.guarded(chat.simple_chat), "rag": chat.guarded(chat.rag_chat),
+                "agent": chat.guarded(chat.agent_chat)}
 
     async def events() -> AsyncIterator[str]:
         yield sse({"type": "meta", "conversation_id": conversation_id, "mode": req.mode})
@@ -192,3 +194,16 @@ async def decide_endpoint(action_id: str, decision: Decision):
         return await actions.decide(action_id, decision.approve)
     except LookupError:
         raise HTTPException(404, "Action not found") from None
+
+
+@app.get("/api/metrics")
+async def metrics_endpoint(hours: int = 24):
+    """Cost, latency, cache and guardrail numbers for the last `hours`."""
+    await observability.flush()
+    return await observability.metrics(hours)
+
+
+@app.delete("/api/cache")
+async def clear_cache_endpoint():
+    await cache.clear()
+    return {"cleared": True}

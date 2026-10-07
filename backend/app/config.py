@@ -66,6 +66,18 @@ class Settings(BaseSettings):
     # Load mock customers and invoices on startup if there are none.
     auto_seed: bool = True
 
+    # --- Production (weeks 9-10) ----------------------------------------------
+    # Reuse answers to questions that mean the same thing (first message of a chat only).
+    cache_enabled: bool = True
+    cache_similarity: float = 0.95
+    cache_ttl_hours: int = 24
+    # Second layer of injection detection using FAST_MODEL (adds one small call per message).
+    guard_llm: bool = False
+    # Optional Langfuse tracing. Leave empty to disable.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "http://localhost:3001"
+
     llm_timeout_seconds: float = 120.0
     temperature: float = 0.2
 

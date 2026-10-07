@@ -14,6 +14,8 @@ type Message = {
   steps?: Step[];
   approvals?: Approval[];
   escalatedTicket?: number;
+  cacheHit?: string;
+  guardrails?: string[];
 };
 
 type Step = { id: string; name: string; args: Record<string, unknown>; result?: unknown };
@@ -66,7 +68,12 @@ export default function Home() {
         setConversationId(event.conversation_id);
         break;
       case "sources":
-        updateLast((m) => ({ ...m, sources: event.sources, query: event.query }));
+        updateLast((m) => ({
+          ...m,
+          sources: event.sources,
+          query: event.query,
+          cacheHit: event.cache_hit ? event.cached_question : undefined,
+        }));
         break;
       case "classification":
         updateLast((m) => ({ ...m, classification: event }));
@@ -94,6 +101,18 @@ export default function Home() {
         break;
       case "escalated":
         updateLast((m) => ({ ...m, escalatedTicket: event.ticket_id }));
+        break;
+      case "guardrail":
+        updateLast((m) => ({
+          ...m,
+          guardrails: [
+            ...(m.guardrails ?? []),
+            event.kind === "injection" ? "Blocked by the input guardrail" : `Redacted: ${event.detail}`,
+          ],
+        }));
+        break;
+      case "replace":
+        updateLast((m) => ({ ...m, text: event.text, guardrails: [...(m.guardrails ?? []), "Reply replaced: prompt leak"] }));
         break;
       case "token":
         updateLast((m) => ({ ...m, text: m.text + event.text }));
@@ -170,6 +189,9 @@ export default function Home() {
               </option>
             ))}
           </select>
+          <a href="/metrics" className={styles.secondary}>
+            Metrics
+          </a>
           <button onClick={newChat} className={styles.secondary}>
             New chat
           </button>
@@ -193,6 +215,12 @@ export default function Home() {
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? styles.user : styles.assistant}>
             <div className={styles.bubble}>
+              {m.guardrails?.map((g) => (
+                <div key={g} className={styles.guard}>
+                  🛡 {g}
+                </div>
+              ))}
+              {m.cacheHit && <div className={styles.muted}>⚡ Cached answer (similar to “{m.cacheHit}”)</div>}
               {m.classification && (
                 <div className={styles.badges}>
                   <span className={styles.badge}>{m.classification.category}</span>

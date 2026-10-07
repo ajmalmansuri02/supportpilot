@@ -17,7 +17,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
-from app import memory
+from app import cache, guardrails, memory
 from app.config import get_settings
 from app.llm import LLMClient
 from app.prompts import load_prompt
@@ -98,12 +98,26 @@ async def rag_chat(llm: LLMClient, conversation_id: str, message: str) -> AsyncI
     await memory.add_message(conversation_id, "user", message)
     await memory.compact_if_needed(llm, conversation_id)
     summary, history = await memory.load_history(conversation_id)
+    system = load_prompt("system")
+    first_message = len(history) == 1 and not summary
 
     query = await rewrite_query(llm, history, message, conversation_id)
-    hits = await retrieve(llm, query)
-    yield {"type": "sources", "query": query, "sources": sources_payload(hits)}
+    [query_vector] = await llm.embed([query])
 
-    system = load_prompt("system")
+    # Week 9: a first question similar enough to an earlier one reuses its answer.
+    if first_message and (hit := await cache.lookup(query_vector)):
+        yield {"type": "sources", "query": query, "sources": hit["sources"],
+               "cache_hit": True, "cached_question": hit["question"]}
+        yield {"type": "token", "text": hit["answer"]}
+        await memory.add_message(conversation_id, "assistant", hit["answer"], {
+            "mode": "rag", "cache_hit": True, "sources": [s["source"] for s in hit["sources"]]})
+        yield {"type": "done", "prompt_version": system.version}
+        return
+
+    hits = await retrieve(llm, query, query_vector=query_vector)
+    sources = sources_payload(hits)
+    yield {"type": "sources", "query": query, "sources": sources}
+
     if not hits:
         # Nothing relevant: don't let the model improvise an answer.
         answer = f"{IDK} Would you like me to open a support ticket for you?"
@@ -115,6 +129,8 @@ async def rag_chat(llm: LLMClient, conversation_id: str, message: str) -> AsyncI
             parts.append(piece)
             yield {"type": "token", "text": piece}
         answer = "".join(parts)
+        if first_message and guardrails.check_output(answer)[1] is False:
+            await cache.store(query, query_vector, answer, sources)
 
     await memory.add_message(conversation_id, "assistant", answer, {
         "mode": "rag", "prompt_version": system.version, "query": query,
@@ -155,7 +171,12 @@ async def agent_chat(llm: LLMClient, conversation_id: str, message: str) -> Asyn
     messages = memory.build_messages(f"{system.text}\n\n{agent_prompt.text}", summary, history)
 
     queue: asyncio.Queue[Event] = asyncio.Queue()
-    ctx = AgentContext(llm=llm, conversation_id=conversation_id, emit=queue.put_nowait)
+    ctx = AgentContext(
+        llm=llm, conversation_id=conversation_id, emit=queue.put_nowait,
+        # Week 10: the agent may only touch accounts the customer named in this chat.
+        allowed_emails=guardrails.emails_in(
+            [m["content"] for m in history if m["role"] == "user"] + [summary or ""]),
+    )
     engine = run_agent_graph if get_settings().agent_engine == "graph" else run_agent_loop
     task = asyncio.create_task(engine(messages, get_registry(), ctx))
 
@@ -176,3 +197,45 @@ async def agent_chat(llm: LLMClient, conversation_id: str, message: str) -> Asyn
         "prompt_version": agent_prompt.version, "tool_calls": ctx.tool_calls,
     })
     yield {"type": "done", "prompt_version": agent_prompt.version}
+
+
+
+# --- Week 10: guardrails around every mode ------------------------------------------------
+
+
+def guarded(handler):
+    """Wrap a chat mode with input and output guardrails.
+
+    Input: secrets are redacted before the model or database sees them, and obvious
+    injection attempts are answered with a fixed reply without calling the model.
+    Output: a reply that leaks our prompts is replaced (the UI gets a "replace" event).
+    """
+
+    async def run(llm: LLMClient, conversation_id: str, message: str) -> AsyncIterator[Event]:
+        check = await guardrails.check_input(message, llm)
+        for flag in check.flags:
+            await guardrails.log_event(conversation_id, "pii_redacted", flag)
+            yield {"type": "guardrail", "kind": "pii_redacted", "detail": flag}
+        if check.blocked:
+            await guardrails.log_event(conversation_id, "injection", check.reason or "")
+            await memory.add_message(conversation_id, "user", check.text, {"blocked": True})
+            await memory.add_message(conversation_id, "assistant", guardrails.BLOCKED_REPLY,
+                                     {"guardrail": check.reason})
+            yield {"type": "guardrail", "kind": "injection", "detail": check.reason}
+            yield {"type": "token", "text": guardrails.BLOCKED_REPLY}
+            yield {"type": "done"}
+            return
+
+        parts: list[str] = []
+        async for event in handler(llm, conversation_id, check.text):
+            if event["type"] == "token":
+                parts.append(event["text"])
+            if event["type"] == "done":
+                safe, leaked = guardrails.check_output("".join(parts))
+                if leaked:
+                    await guardrails.log_event(conversation_id, "prompt_leak", "reply replaced")
+                    await memory.replace_last_assistant(conversation_id, safe)
+                    yield {"type": "replace", "text": safe}
+            yield event
+
+    return run
