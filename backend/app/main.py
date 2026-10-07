@@ -10,7 +10,7 @@ import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
@@ -19,11 +19,15 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app import chat, db, memory
+from app.agent import actions
+from app.agent.registry import connect_mcp, get_registry
 from app.classify import TicketClassification, classify_ticket
 from app.config import get_settings
 from app.llm import get_llm
 from app.rag.ingest import DEFAULT_DOCS, ingest_folder
 from app.rag.search import search
+from app.services import tickets
+from app.services.seed import seed
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("supportpilot")
@@ -31,11 +35,17 @@ log = logging.getLogger("supportpilot")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings = get_settings()
     await db.open_pool()
     await db.init_schema()
-    if get_settings().auto_ingest:
+    if settings.auto_ingest:
         await _ingest_if_empty()
-    yield
+    if settings.auto_seed:
+        await seed()
+    async with AsyncExitStack() as stack:
+        if settings.tickets_via_mcp:
+            await connect_mcp(stack)
+        yield
     await db.close_pool()
 
 
@@ -64,13 +74,17 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     conversation_id: str | None = None
-    mode: Literal["chat", "rag"] = "rag"
+    mode: Literal["chat", "rag", "agent"] = "agent"
 
 
 class AnswerRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     retrieval_mode: Literal["vector", "keyword", "hybrid"] | None = None
     reranker: Literal["none", "cross_encoder"] | None = None
+
+
+class Decision(BaseModel):
+    approve: bool
 
 
 class ClassifyRequest(BaseModel):
@@ -104,7 +118,7 @@ async def chat_endpoint(req: ChatRequest):
     if not _is_uuid(conversation_id) or not await memory.conversation_exists(conversation_id):
         conversation_id = await memory.create_conversation()
 
-    handlers = {"chat": chat.simple_chat, "rag": chat.rag_chat}
+    handlers = {"chat": chat.simple_chat, "rag": chat.rag_chat, "agent": chat.agent_chat}
 
     async def events() -> AsyncIterator[str]:
         yield sse({"type": "meta", "conversation_id": conversation_id, "mode": req.mode})
@@ -146,3 +160,35 @@ async def answer_endpoint(req: AnswerRequest):
     return await chat.answer_question(
         get_llm(), req.question, mode=req.retrieval_mode, reranker=req.reranker
     )
+
+
+@app.get("/api/tools")
+async def tools_endpoint():
+    """The tools the agent can use right now, with their risk level and origin."""
+    return [{"name": t.name, "risk": t.risk, "description": t.description,
+             "parameters": t.spec()["function"]["parameters"]}
+            for t in get_registry().tools.values()]
+
+
+@app.get("/api/tickets")
+async def tickets_endpoint(customer_email: str | None = None, status: str | None = None):
+    return await tickets.list_tickets(customer_email, status, limit=100)
+
+
+@app.get("/api/actions/{action_id}")
+async def action_endpoint(action_id: str):
+    action = await actions.get_action(action_id) if _is_uuid(action_id) else None
+    if action is None:
+        raise HTTPException(404, "Action not found")
+    return action
+
+
+@app.post("/api/actions/{action_id}")
+async def decide_endpoint(action_id: str, decision: Decision):
+    """Approve or reject a refund or plan change the agent asked for (human in the loop)."""
+    if not _is_uuid(action_id):
+        raise HTTPException(404, "Action not found")
+    try:
+        return await actions.decide(action_id, decision.approve)
+    except LookupError:
+        raise HTTPException(404, "Action not found") from None

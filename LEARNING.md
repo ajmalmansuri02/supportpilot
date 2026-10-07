@@ -84,3 +84,49 @@ faithfulness), abstention, regression gates in CI.
 `--retrieval keyword` and `--retrieval hybrid`, then `--compare` the three result files and
 put the table in this README. Then tune `RAG_MIN_SIMILARITY` until `abstain_ok` is high and
 `false_abstain` is low.
+
+## Week 6: Tool calling from scratch
+
+**Concepts:** function-calling schemas, the agent loop, tool results as messages, error handling
+and retries, step limits, risk levels.
+
+| File | What to look at |
+| --- | --- |
+| `backend/app/agent/tools.py` | Each tool is a name, a description, a JSON schema and a function, plus a risk level (read / write / approval). `execute()` returns errors to the model instead of crashing. |
+| `backend/app/agent/loop.py` | The whole agent loop in about 20 lines. |
+| `backend/app/prompts/agent.md` | When to use which tool, and what never to do. |
+| `backend/app/services/` | The "real systems" the tools touch: accounts, invoices, tickets (mock data in `seed.py`). |
+
+**Try:** set `AGENT_ENGINE=loop` and ask about a double charge with `priya@example.com`. Watch the
+tool calls appear in the UI, and open them to see exactly what the model received.
+
+## Week 7: LangGraph and human-in-the-loop
+
+**Concepts:** graph state, nodes, conditional edges, routing, approvals before risky actions,
+agent evals (task success).
+
+| File | What to look at |
+| --- | --- |
+| `backend/app/agent/graph.py` | classify → (escalate or agent ⇄ tools) as a LangGraph `StateGraph`. Print the diagram with `GRAPH.get_graph().draw_mermaid()`. |
+| `backend/app/agent/actions.py` | Refunds and plan changes become pending actions; only `POST /api/actions/{id}` with `approve: true` runs them. |
+| `backend/app/agent/tools.py` (`_request_refund`) | Server-side checks the model can't skip: the invoice must belong to that customer and be paid. |
+| `evals/datasets/agent_scenarios.jsonl` + `backend/app/evals/agent_eval.py` | 20 scripted conversations: right tools, no forbidden tools, approvals and escalations happen when they should. |
+
+**Try:** `uv run python -m app.evals.agent_eval --engine loop --tag loop` and
+`--engine graph --tag graph` with your real model, and compare task success. Your answer to
+"what did LangGraph give you?" is the week 7 deliverable.
+
+## Week 8: MCP
+
+**Concepts:** MCP hosts, clients and servers; tools vs resources vs prompts; stdio and HTTP
+transports; discovering tools at runtime; tool annotations.
+
+| File | What to look at |
+| --- | --- |
+| `backend/app/mcp_server.py` | An MCP server with 4 tools, 2 resources and 1 prompt, in about 100 lines. |
+| `backend/app/agent/registry.py` | With `TICKETS_VIA_MCP=true` the backend launches the server, lists its tools and hands them to the agent. Annotations (`read_only_hint`, `destructive_hint`) become risk levels. |
+| `backend/tests/test_mcp.py` | Testing an MCP server in-process and over a real stdio subprocess. |
+
+**Try:** run the MCP Inspector command from the README, call `create_ticket` from it, then
+ask the agent "list my tickets" with `TICKETS_VIA_MCP=true`. Then connect the same server to
+Claude Desktop or VS Code.

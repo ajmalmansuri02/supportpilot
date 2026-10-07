@@ -39,6 +39,11 @@ jobs:
         run: |
           uv run python -m app.rag.ingest
           uv run python -m app.evals.rag_eval --tag ci --baseline ../evals/baseline-fake.json
+      # Week 7: agent scenarios (right tools, no forbidden tools, approvals, escalation).
+      - name: Agent eval regression gate
+        env:
+          RAG_MIN_SIMILARITY: "0.2"
+        run: uv run python -m app.evals.agent_eval --tag ci --baseline ../evals/baseline-fake-agent.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

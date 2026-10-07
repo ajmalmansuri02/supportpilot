@@ -58,6 +58,14 @@ class Settings(BaseSettings):
     # Load data/docs automatically at startup if the knowledge base is empty.
     auto_ingest: bool = True
 
+    # --- Agent (weeks 6-8) ----------------------------------------------------
+    # "graph" = LangGraph version (week 7), "loop" = plain Python loop (week 6).
+    agent_engine: Literal["graph", "loop"] = "graph"
+    # Get the ticket tools from the MCP server instead of calling them directly (week 8).
+    tickets_via_mcp: bool = False
+    # Load mock customers and invoices on startup if there are none.
+    auto_seed: bool = True
+
     llm_timeout_seconds: float = 120.0
     temperature: float = 0.2
 

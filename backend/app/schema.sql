@@ -45,3 +45,54 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 CREATE INDEX IF NOT EXISTS chunks_embedding_idx ON chunks USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS chunks_tsv_idx ON chunks USING gin (tsv);
+
+-- Week 6: mock customer data the agent can look up ------------------------------------
+CREATE TABLE IF NOT EXISTS customers (
+    id            bigserial PRIMARY KEY,
+    email         text NOT NULL UNIQUE,
+    name          text NOT NULL,
+    plan          text NOT NULL CHECK (plan IN ('free', 'pro', 'team')),
+    billing_cycle text CHECK (billing_cycle IN ('monthly', 'annual')),
+    seats         int NOT NULL DEFAULT 1,
+    status        text NOT NULL DEFAULT 'active',
+    created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS invoices (
+    id          text PRIMARY KEY,                 -- e.g. INV-204518
+    customer_id bigint NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    amount_usd  numeric(10, 2) NOT NULL,
+    description text NOT NULL,
+    status      text NOT NULL DEFAULT 'paid' CHECK (status IN ('paid', 'refunded', 'failed')),
+    issued_at   timestamptz NOT NULL
+);
+
+-- Weeks 6-8: support tickets (also exposed through the MCP server) -------------------
+CREATE TABLE IF NOT EXISTS tickets (
+    id              bigserial PRIMARY KEY,
+    conversation_id uuid REFERENCES conversations(id) ON DELETE SET NULL,
+    customer_email  text,
+    subject         text NOT NULL,
+    description     text NOT NULL,
+    category        text NOT NULL DEFAULT 'other',
+    priority        text NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
+    status          text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'pending', 'resolved')),
+    assignee        text NOT NULL DEFAULT 'ai' CHECK (assignee IN ('ai', 'human')),
+    notes           jsonb NOT NULL DEFAULT '[]'::jsonb,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+-- Week 7: risky actions wait here until a human approves them ------------------------
+CREATE TABLE IF NOT EXISTS pending_actions (
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id uuid REFERENCES conversations(id) ON DELETE CASCADE,
+    tool            text NOT NULL,
+    args            jsonb NOT NULL,
+    description     text NOT NULL,
+    status          text NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'approved', 'rejected', 'failed')),
+    result          jsonb,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    decided_at      timestamptz
+);

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { ChatEvent, Mode, Source, getHealth, streamChat } from "@/lib/api";
+import { ChatEvent, Mode, Source, decideAction, getHealth, streamChat } from "@/lib/api";
 import styles from "./page.module.css";
 
 type Message = {
@@ -10,24 +10,39 @@ type Message = {
   error?: string;
   sources?: Source[];
   query?: string;
+  classification?: { category: string; priority: string; sentiment: string };
+  steps?: Step[];
+  approvals?: Approval[];
+  escalatedTicket?: number;
+};
+
+type Step = { id: string; name: string; args: Record<string, unknown>; result?: unknown };
+
+type Approval = {
+  actionId: string;
+  description: string;
+  status: "pending" | "approved" | "rejected" | "failed";
+  message?: string;
 };
 
 const MODES: { value: Mode; label: string; hint: string }[] = [
+  { value: "agent", label: "Agent", hint: "Uses tools: docs search, accounts, tickets, refunds" },
   { value: "rag", label: "Docs (RAG)", hint: "Answers from the CloudNotes docs with citations" },
   { value: "chat", label: "Plain chat", hint: "Plain LLM conversation with memory, no documents" },
 ];
 
 const EXAMPLES = [
   "How much does the Pro plan cost?",
-  "I was charged twice this month. Can I get a refund?",
-  "How do I turn on two-factor authentication?",
+  "I was charged twice this month. My email is priya@example.com",
+  "What plan am I on? My email is rahul@example.com",
+  "I'd like to talk to a human, please",
   "Is there a Linux desktop app?",
 ];
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<Mode>("rag");
+  const [mode, setMode] = useState<Mode>("agent");
   const [busy, setBusy] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [health, setHealth] = useState<string>("connecting…");
@@ -53,6 +68,33 @@ export default function Home() {
       case "sources":
         updateLast((m) => ({ ...m, sources: event.sources, query: event.query }));
         break;
+      case "classification":
+        updateLast((m) => ({ ...m, classification: event }));
+        break;
+      case "tool_call":
+        updateLast((m) => ({
+          ...m,
+          steps: [...(m.steps ?? []), { id: event.id, name: event.name, args: event.args }],
+        }));
+        break;
+      case "tool_result":
+        updateLast((m) => ({
+          ...m,
+          steps: (m.steps ?? []).map((s) => (s.id === event.id ? { ...s, result: event.result } : s)),
+        }));
+        break;
+      case "approval_required":
+        updateLast((m) => ({
+          ...m,
+          approvals: [
+            ...(m.approvals ?? []),
+            { actionId: event.action_id, description: event.description, status: "pending" },
+          ],
+        }));
+        break;
+      case "escalated":
+        updateLast((m) => ({ ...m, escalatedTicket: event.ticket_id }));
+        break;
       case "token":
         updateLast((m) => ({ ...m, text: m.text + event.text }));
         break;
@@ -73,6 +115,28 @@ export default function Home() {
       updateLast((m) => ({ ...m, error: String(err) }));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function decide(index: number, actionId: string, approve: boolean) {
+    try {
+      const res = await decideAction(actionId, approve);
+      setMessages((prev) =>
+        prev.map((m, i) =>
+          i !== index
+            ? m
+            : {
+                ...m,
+                approvals: m.approvals?.map((a) =>
+                  a.actionId === actionId
+                    ? { ...a, status: res.status as Approval["status"], message: res.message }
+                    : a,
+                ),
+              },
+        ),
+      );
+    } catch (err) {
+      alert(String(err));
     }
   }
 
@@ -115,7 +179,10 @@ export default function Home() {
       <section className={styles.messages}>
         {messages.length === 0 && (
           <div className={styles.empty}>
-            <p>Ask anything about CloudNotes. Try:</p>
+            <p>
+              Ask anything about CloudNotes. Demo accounts: priya@example.com (charged twice),
+              rahul@example.com (Team), maria@example.com, alex@example.com (Free).
+            </p>
             {EXAMPLES.map((ex) => (
               <button key={ex} className={styles.example} onClick={() => send(ex)}>
                 {ex}
@@ -126,8 +193,56 @@ export default function Home() {
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? styles.user : styles.assistant}>
             <div className={styles.bubble}>
+              {m.classification && (
+                <div className={styles.badges}>
+                  <span className={styles.badge}>{m.classification.category}</span>
+                  <span className={styles.badge}>priority: {m.classification.priority}</span>
+                  <span className={styles.badge}>{m.classification.sentiment}</span>
+                </div>
+              )}
+              {m.steps && m.steps.length > 0 && (
+                <details className={styles.steps}>
+                  <summary>
+                    {m.steps.length} tool call{m.steps.length > 1 ? "s" : ""}:{" "}
+                    {m.steps.map((s) => s.name).join(" → ")}
+                  </summary>
+                  {m.steps.map((s) => (
+                    <div key={s.id} className={styles.step}>
+                      <code>
+                        {s.name}({JSON.stringify(s.args)})
+                      </code>
+                      {s.result !== undefined && (
+                        <pre>{JSON.stringify(s.result, null, 2).slice(0, 1200)}</pre>
+                      )}
+                    </div>
+                  ))}
+                </details>
+              )}
               {m.text || (busy && i === messages.length - 1 ? <span className={styles.typing}>…</span> : null)}
               {m.error && <p className={styles.error}>{m.error}</p>}
+              {m.escalatedTicket && (
+                <p className={styles.notice}>Handed to a human agent · ticket #{m.escalatedTicket}</p>
+              )}
+              {m.approvals?.map((a) => (
+                <div key={a.actionId} className={styles.approval}>
+                  <div className={styles.approvalTitle}>Support agent approval needed</div>
+                  <div>{a.description}</div>
+                  {a.status === "pending" ? (
+                    <div className={styles.approvalButtons}>
+                      <button className={styles.primary} onClick={() => decide(i, a.actionId, true)}>
+                        Approve
+                      </button>
+                      <button className={styles.secondary} onClick={() => decide(i, a.actionId, false)}>
+                        Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <div className={a.status === "approved" ? styles.ok : styles.muted}>
+                      {a.message ?? a.status}
+                    </div>
+                  )}
+                </div>
+              ))}
               {m.sources && m.sources.length > 0 && (
                 <details className={styles.sources}>
                   <summary>

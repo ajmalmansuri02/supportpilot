@@ -1,0 +1,12 @@
+{
+  "tag": "fake",
+  "summary": {
+    "task_success": 0.8,
+    "avg_tool_calls": 1.05,
+    "expected_tools": 1.0,
+    "no_forbidden_tools": 1.0,
+    "expected_events": 1.0,
+    "no_unexpected_approval": 1.0,
+    "answer_mentions": 0.8
+  }
+}

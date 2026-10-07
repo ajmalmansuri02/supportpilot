@@ -2,6 +2,10 @@
 to the browser as Server-Sent Events:
 
     {"type": "sources", "sources": [...]}   documents used for the answer (RAG mode)
+    {"type": "classification", ...}        how the agent classified the message
+    {"type": "tool_call" / "tool_result"}  what the agent is doing
+    {"type": "approval_required", ...}      a risky action is waiting for a human
+    {"type": "escalated", "ticket_id": 1}   handed to a human agent
     {"type": "token", "text": "..."}       a piece of the answer
     {"type": "done", "prompt_version": 1}  the answer is complete
     {"type": "error", "message": "..."}    something went wrong
@@ -9,6 +13,7 @@ to the browser as Server-Sent Events:
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -131,3 +136,43 @@ async def answer_question(llm: LLMClient, question: str, **search_kwargs) -> dic
         "sources": sources_payload(hits),
         "contexts": [h.content for h in hits],
     }
+
+
+# --- Weeks 6-8: the support agent with tools ------------------------------------------
+
+
+async def agent_chat(llm: LLMClient, conversation_id: str, message: str) -> AsyncIterator[Event]:
+    """Run the tool-using agent and stream what it does: tool calls, results, approvals."""
+    from app.agent.graph import run_agent_graph
+    from app.agent.loop import run_agent_loop
+    from app.agent.registry import get_registry
+    from app.agent.tools import AgentContext
+
+    await memory.add_message(conversation_id, "user", message)
+    await memory.compact_if_needed(llm, conversation_id)
+    summary, history = await memory.load_history(conversation_id)
+    system, agent_prompt = load_prompt("system"), load_prompt("agent")
+    messages = memory.build_messages(f"{system.text}\n\n{agent_prompt.text}", summary, history)
+
+    queue: asyncio.Queue[Event] = asyncio.Queue()
+    ctx = AgentContext(llm=llm, conversation_id=conversation_id, emit=queue.put_nowait)
+    engine = run_agent_graph if get_settings().agent_engine == "graph" else run_agent_loop
+    task = asyncio.create_task(engine(messages, get_registry(), ctx))
+
+    # Forward events while the agent works, then the final answer.
+    while not task.done() or not queue.empty():
+        getter = asyncio.ensure_future(queue.get())
+        done, _ = await asyncio.wait({getter, task}, return_when=asyncio.FIRST_COMPLETED)
+        if getter in done:
+            yield getter.result()
+        else:
+            getter.cancel()
+    answer = task.result()  # re-raises if the agent crashed
+
+    for i, word in enumerate(answer.split(" ")):
+        yield {"type": "token", "text": word if i == 0 else " " + word}
+    await memory.add_message(conversation_id, "assistant", answer, {
+        "mode": "agent", "engine": get_settings().agent_engine,
+        "prompt_version": agent_prompt.version, "tool_calls": ctx.tool_calls,
+    })
+    yield {"type": "done", "prompt_version": agent_prompt.version}

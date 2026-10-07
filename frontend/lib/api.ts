@@ -3,13 +3,18 @@
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-export type Mode = "chat" | "rag";
+export type Mode = "chat" | "rag" | "agent";
 
 export type Source = { n: number; source: string; heading: string; content: string; score: number };
 
 export type ChatEvent =
   | { type: "meta"; conversation_id: string; mode: Mode }
   | { type: "sources"; query: string; sources: Source[] }
+  | { type: "classification"; category: string; priority: string; sentiment: string }
+  | { type: "tool_call"; id: string; name: string; args: Record<string, unknown> }
+  | { type: "tool_result"; id: string; name: string; result: unknown }
+  | { type: "approval_required"; action_id: string; tool: string; description: string }
+  | { type: "escalated"; ticket_id: number }
   | { type: "token"; text: string }
   | { type: "done"; prompt_version?: number }
   | { type: "error"; message: string };
@@ -49,5 +54,18 @@ export async function streamChat(
 
 export async function getHealth(): Promise<Record<string, string>> {
   const res = await fetch(`${API_URL}/api/health`);
+  return res.json();
+}
+
+export async function decideAction(
+  actionId: string,
+  approve: boolean,
+): Promise<{ status: string; message?: string }> {
+  const res = await fetch(`${API_URL}/api/actions/${actionId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ approve }),
+  });
+  if (!res.ok) throw new Error(`Backend returned ${res.status}`);
   return res.json();
 }
