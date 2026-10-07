@@ -1,6 +1,6 @@
 """One small LLM client for every provider.
 
-Ollama, Gemini (AI Studio) and most hosted platforms all speak the OpenAI chat API,
+Ollama, Gemini (AI Studio), Vertex AI and most hosted platforms all speak the OpenAI chat API,
 so a single `openai` SDK client covers them; only the base URL, key and model change.
 That is the "provider switch" from week 1: set LLM_PROVIDER in .env.
 
@@ -59,6 +59,9 @@ class CallRecord:
     cost_usd: float
     conversation_id: str | None = None
     error: str | None = None
+    # The prompt and reply, kept only so tracing tools (Langfuse) can show them.
+    input: list[dict[str, Any]] | None = None
+    output: str | None = None
 
 
 Listener = Callable[[CallRecord], None]
@@ -76,11 +79,46 @@ def _connection(settings: Settings, provider: str) -> tuple[str, str]:
         if not settings.gemini_api_key:
             raise RuntimeError("LLM_PROVIDER=gemini needs GEMINI_API_KEY in .env")
         return settings.gemini_base_url, settings.gemini_api_key
+    if provider == "vertex":
+        if not settings.vertex_project:
+            raise RuntimeError("LLM_PROVIDER=vertex needs VERTEX_PROJECT in .env")
+        loc = settings.vertex_location
+        host = "aiplatform.googleapis.com" if loc == "global" else f"{loc}-aiplatform.googleapis.com"
+        url = f"https://{host}/v1/projects/{settings.vertex_project}/locations/{loc}/endpoints/openapi"
+        return url, "set-per-request"  # replaced by a fresh Google access token, see GoogleToken
     if provider == "openai_compatible":
         if not settings.openai_compatible_base_url:
             raise RuntimeError("Set OPENAI_COMPATIBLE_BASE_URL in .env")
         return settings.openai_compatible_base_url, settings.openai_compatible_api_key or "none"
     raise ValueError(f"Unknown provider {provider!r}")
+
+
+class GoogleToken:
+    """Short-lived Google Cloud access tokens for Vertex AI (week 12).
+
+    Vertex has no API keys: it uses your identity. Locally that is
+    `gcloud auth application-default login`; on Cloud Run it is the service's account.
+    Tokens last about an hour, so we refresh them shortly before they expire.
+    """
+
+    def __init__(self):
+        self._creds = None
+
+    async def get(self) -> str:
+        import asyncio
+
+        if self._creds is None:
+            try:
+                import google.auth
+            except ImportError as exc:
+                raise RuntimeError("LLM_PROVIDER=vertex needs `uv sync --extra vertex`") from exc
+            self._creds, _ = google.auth.default(
+                scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        if not self._creds.valid:
+            from google.auth.transport.requests import Request
+
+            await asyncio.to_thread(self._creds.refresh, Request())
+        return self._creds.token
 
 
 class LLMClient:
@@ -90,6 +128,8 @@ class LLMClient:
         self.embed_provider = self.settings.embed_provider
         self._listeners: list[Listener] = []
         self._fake = None
+        self._google = GoogleToken() if "vertex" in (self.provider, self.embed_provider) else None
+        self._vertex_clients: list[AsyncOpenAI] = []
         if "fake" in (self.provider, self.embed_provider):
             from app.fake_llm import FakeLLM
 
@@ -101,16 +141,27 @@ class LLMClient:
         if provider == "fake":
             return None
         base_url, key = _connection(self.settings, provider)
-        return AsyncOpenAI(
+        client = AsyncOpenAI(
             base_url=base_url, api_key=key, timeout=self.settings.llm_timeout_seconds
         )
+        if provider == "vertex":
+            self._vertex_clients.append(client)
+        return client
+
+    async def _authorize(self) -> None:
+        """Put a current Google access token on the Vertex clients (no-op otherwise)."""
+        if self._google and self._vertex_clients:
+            token = await self._google.get()
+            for client in self._vertex_clients:
+                client.api_key = token
 
     # -- observability hooks ---------------------------------------------------
     def add_listener(self, listener: Listener) -> None:
         self._listeners.append(listener)
 
     def _record(self, purpose: str, model: str, usage: Usage, started: float,
-                conversation_id: str | None, error: str | None = None) -> int:
+                conversation_id: str | None, error: str | None = None,
+                messages: list[dict[str, Any]] | None = None, output: str | None = None) -> int:
         latency_ms = int((time.perf_counter() - started) * 1000)
         cost = (
             usage.input_tokens * self.settings.price_input_per_m
@@ -120,6 +171,7 @@ class LLMClient:
             purpose=purpose, provider=self.provider, model=model,
             input_tokens=usage.input_tokens, output_tokens=usage.output_tokens,
             latency_ms=latency_ms, cost_usd=cost, conversation_id=conversation_id, error=error,
+            input=messages, output=output,
         )
         for listener in self._listeners:
             try:
@@ -144,6 +196,7 @@ class LLMClient:
         model = model or self.settings.chat_model
         started = time.perf_counter()
         try:
+            await self._authorize()
             if self._chat_client is None:
                 result = self._fake.chat(messages, tools=tools, json_schema=json_schema)
             else:
@@ -179,7 +232,9 @@ class LLMClient:
                 output_tokens=estimate_tokens(result.content),
             )
         result.model = model
-        result.latency_ms = self._record(purpose, model, result.usage, started, conversation_id)
+        output = result.content or json.dumps([c.__dict__ for c in result.tool_calls])
+        result.latency_ms = self._record(purpose, model, result.usage, started, conversation_id,
+                                         messages=messages, output=output)
         return result
 
     async def stream(
@@ -196,6 +251,7 @@ class LLMClient:
         usage = Usage()
         parts: list[str] = []
         try:
+            await self._authorize()
             if self._chat_client is None:
                 for piece in self._fake.stream(messages):
                     parts.append(piece)
@@ -226,7 +282,8 @@ class LLMClient:
                 input_tokens=estimate_tokens(json.dumps(messages)),
                 output_tokens=estimate_tokens("".join(parts)),
             )
-        self._record(purpose, model, usage, started, conversation_id)
+        self._record(purpose, model, usage, started, conversation_id,
+                     messages=messages, output="".join(parts))
 
     # -- embeddings ------------------------------------------------------------
     async def embed(self, texts: list[str], *, kind: str = "query",
@@ -237,6 +294,7 @@ class LLMClient:
         texts = [prefix + t for t in texts]
         if self._embed_client is None:
             return [self._fake.embed(t) for t in texts]
+        await self._authorize()
         vectors: list[list[float]] = []
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]

@@ -18,7 +18,9 @@ services:
 
   backend:
     profiles: ["app"]
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file: .env
     environment:
       DATABASE_URL: postgresql://supportpilot:supportpilot@db:5432/supportpilot

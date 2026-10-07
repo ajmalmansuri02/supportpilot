@@ -130,3 +130,66 @@ transports; discovering tools at runtime; tool annotations.
 **Try:** run the MCP Inspector command from the README, call `create_ticket` from it, then
 ask the agent "list my tickets" with `TICKETS_VIA_MCP=true`. Then connect the same server to
 Claude Desktop or VS Code.
+
+## Week 9: Cost, latency, tracing and caching
+
+**Concepts:** tokens as cost, p50/p95 latency, model routing (small model for small jobs),
+tracing, semantic caching and its risks.
+
+| File | What to look at |
+| --- | --- |
+| `backend/app/llm.py` (`_record`) | Every call produces a `CallRecord`; listeners decide where it goes. |
+| `backend/app/observability.py` | One listener writes to Postgres in the background, another sends traces to Langfuse. `metrics()` is the SQL behind the dashboard. |
+| `backend/app/cache.py` | Embed the question, find a cached one above `CACHE_SIMILARITY`, reuse the answer. The key includes the model and prompt version so a change invalidates old answers. |
+| `frontend/app/metrics/page.tsx` | The dashboard: cost and latency by purpose (chat, rag, classify, judge...). |
+
+**Try:** ask the same question twice in a new chat and compare latency on the metrics page.
+Lower `CACHE_SIMILARITY` to 0.8 and find a pair of questions that wrongly share an answer;
+that is why the threshold matters. Set a hosted price and explain which purpose costs most.
+
+## Week 10: Guardrails and red-teaming
+
+**Concepts:** OWASP Top 10 for LLM apps, prompt injection (direct and through retrieved data),
+PII redaction, output checks, least-privilege tools, red-team evals.
+
+| File | What to look at |
+| --- | --- |
+| `backend/app/guardrails.py` | Input checks, redaction, output leak check, and the email permission rule, each mapped to an OWASP item. |
+| `backend/app/chat.py` (`guarded`) | Wraps every chat mode: check input, redact, run, check output. |
+| `backend/app/agent/tools.py` (`execute`) | A tool call for an email the customer never typed is refused, whatever the model says. |
+| `evals/datasets/redteam.jsonl` + `backend/app/evals/redteam_eval.py` | 20 attacks: injection, leaks, other customers' data, PII. CI fails if the defended rate drops. |
+
+**Try:** write three new attacks that get past the regex checks, add them to `redteam.jsonl`,
+then run the eval with `GUARD_LLM=true` and see how many the small model catches.
+
+## Week 11: Fine-tuning
+
+**Concepts:** when to fine-tune vs prompt vs RAG, synthetic data and distillation, LoRA and
+QLoRA, chat templates, training only on responses, GGUF quantisation, before/after evals.
+
+| File | What to look at |
+| --- | --- |
+| `backend/app/finetune/generate.py` | A big "teacher" model writes and labels tickets for every label combination; `--verify` drops ones it labels differently on a second look. |
+| `finetune/SupportPilot_finetune.ipynb` | Unsloth LoRA training on a free Colab T4: baseline, train, re-measure, export GGUF. |
+| `finetune/Modelfile` | Turns the GGUF into an Ollama model. |
+| `backend/app/evals/classify_eval.py` + `evals/datasets/classify_golden.jsonl` | Accuracy, latency and prompt tokens on 30 hand-written tickets the generator never saw. |
+| `backend/app/classify.py` | `CLASSIFY_MODEL` / `CLASSIFY_PROMPT` swap the router without code changes. |
+
+**Try (the week 11 deliverable):** the comparison table for the prompted 3B, prompted 7B and
+your fine-tuned model, plus one paragraph on whether fine-tuning was worth it.
+
+## Week 12: A managed cloud AI platform
+
+**Concepts:** managed model endpoints, identity-based auth instead of API keys, service
+accounts and least privilege, secret management, containers on serverless, budgets.
+
+| File | What to look at |
+| --- | --- |
+| `backend/app/llm.py` (`GoogleToken`, `_authorize`) | Vertex AI through its OpenAI-compatible endpoint, with short-lived Google tokens instead of a key. |
+| `deploy/gcp/deploy.sh` | APIs, secrets, service account, Cloud Build and Cloud Run in one readable script. |
+| `backend/Dockerfile` | Built from the repo root so the docs ship in the image; listens on Cloud Run's `$PORT`. |
+| `deploy/README.md` | Budget alert first, Neon for a free pgvector database, teardown, Azure alternative. |
+
+**Try:** run the three eval suites with `LLM_PROVIDER=vertex` and add the results next to
+your Ollama numbers. Then deploy, share the URL with a friend, look at the metrics page, and
+tear it down.

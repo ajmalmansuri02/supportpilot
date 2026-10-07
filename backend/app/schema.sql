@@ -96,3 +96,41 @@ CREATE TABLE IF NOT EXISTS pending_actions (
     created_at      timestamptz NOT NULL DEFAULT now(),
     decided_at      timestamptz
 );
+
+-- Week 9: every LLM call, for cost and latency dashboards --------------------------
+CREATE TABLE IF NOT EXISTS llm_calls (
+    id              bigserial PRIMARY KEY,
+    conversation_id uuid,
+    purpose         text NOT NULL,          -- chat, rag_answer, agent, classify, judge...
+    provider        text NOT NULL,
+    model           text NOT NULL,
+    input_tokens    int NOT NULL,
+    output_tokens   int NOT NULL,
+    latency_ms      int NOT NULL,
+    cost_usd        numeric(12, 6) NOT NULL,
+    error           text,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS llm_calls_created_idx ON llm_calls (created_at);
+
+-- Week 9: semantic answer cache --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS answer_cache (
+    id             bigserial PRIMARY KEY,
+    question       text NOT NULL,
+    embedding      vector({embed_dim}) NOT NULL,
+    answer         text NOT NULL,
+    sources        jsonb NOT NULL,
+    settings_key   text NOT NULL,            -- prompt version + retrieval settings
+    hits           int NOT NULL DEFAULT 0,
+    created_at     timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS answer_cache_embedding_idx ON answer_cache USING hnsw (embedding vector_cosine_ops);
+
+-- Week 10: what the guardrails blocked or changed ---------------------------------------
+CREATE TABLE IF NOT EXISTS guardrail_events (
+    id              bigserial PRIMARY KEY,
+    conversation_id uuid,
+    kind            text NOT NULL,          -- injection, pii_redacted, prompt_leak, tool_denied
+    detail          text NOT NULL,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);

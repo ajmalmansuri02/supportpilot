@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-Provider = Literal["ollama", "gemini", "openai_compatible", "fake"]
+Provider = Literal["ollama", "gemini", "vertex", "openai_compatible", "fake"]
 
 
 class Settings(BaseSettings):
@@ -21,7 +21,8 @@ class Settings(BaseSettings):
 
     # --- LLM provider -------------------------------------------------------
     # "ollama" = local models, "gemini" = Google AI Studio free tier,
-    # "openai_compatible" = any other OpenAI-style endpoint (Vertex, Azure, Groq...),
+    # "vertex" = Gemini on Google Cloud Vertex AI (week 12, uses your gcloud login),
+    # "openai_compatible" = any other OpenAI-style endpoint (Azure OpenAI, Groq...),
     # "fake" = deterministic offline model used by tests and CI.
     llm_provider: Provider = "ollama"
     chat_model: str = "qwen2.5:7b"
@@ -31,6 +32,9 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434/v1"
     gemini_api_key: str = ""
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    # Vertex AI: your Google Cloud project and region ("global" works for most models).
+    vertex_project: str = ""
+    vertex_location: str = "global"
     openai_compatible_base_url: str = ""
     openai_compatible_api_key: str = ""
 
@@ -65,6 +69,24 @@ class Settings(BaseSettings):
     tickets_via_mcp: bool = False
     # Load mock customers and invoices on startup if there are none.
     auto_seed: bool = True
+
+    # --- Classification router (weeks 2 and 11) ---------------------------------
+    # Which model and prompt label tickets. After fine-tuning (finetune/README.md), set
+    # CLASSIFY_MODEL=supportpilot-router and CLASSIFY_PROMPT=classify_ft. Empty = FAST_MODEL.
+    classify_model: str = ""
+    classify_prompt: str = "classify"
+
+    # --- Production (weeks 9-10) ----------------------------------------------
+    # Reuse answers to questions that mean the same thing (first message of a chat only).
+    cache_enabled: bool = True
+    cache_similarity: float = 0.95
+    cache_ttl_hours: int = 24
+    # Second layer of injection detection using FAST_MODEL (adds one small call per message).
+    guard_llm: bool = False
+    # Optional Langfuse tracing. Leave empty to disable.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "http://localhost:3001"
 
     llm_timeout_seconds: float = 120.0
     temperature: float = 0.2

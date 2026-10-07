@@ -9,7 +9,9 @@ export type Source = { n: number; source: string; heading: string; content: stri
 
 export type ChatEvent =
   | { type: "meta"; conversation_id: string; mode: Mode }
-  | { type: "sources"; query: string; sources: Source[] }
+  | { type: "sources"; query: string; sources: Source[]; cache_hit?: boolean; cached_question?: string }
+  | { type: "guardrail"; kind: string; detail: string }
+  | { type: "replace"; text: string }
   | { type: "classification"; category: string; priority: string; sentiment: string }
   | { type: "tool_call"; id: string; name: string; args: Record<string, unknown> }
   | { type: "tool_result"; id: string; name: string; result: unknown }
@@ -69,3 +71,27 @@ export async function decideAction(
   if (!res.ok) throw new Error(`Backend returned ${res.status}`);
   return res.json();
 }
+
+export async function getMetrics(hours = 24): Promise<Metrics> {
+  const res = await fetch(`${API_URL}/api/metrics?hours=${hours}`);
+  if (!res.ok) throw new Error(`Backend returned ${res.status}`);
+  return res.json();
+}
+
+export type Metrics = {
+  hours: number;
+  by_purpose: {
+    purpose: string;
+    model: string;
+    calls: number;
+    avg_latency_ms: number;
+    p95_latency_ms: number;
+    input_tokens: number;
+    output_tokens: number;
+    cost_usd: number;
+    errors: number;
+  }[];
+  per_conversation: { conversations: number; avg_cost_usd: number | null; avg_calls: number | null; avg_tokens: number | null };
+  cache: { entries: number; hits: number };
+  guardrails: Record<string, number>;
+};

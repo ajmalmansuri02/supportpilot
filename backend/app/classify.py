@@ -31,15 +31,18 @@ FALLBACK = TicketClassification(category="other", priority="medium", sentiment="
 
 
 async def classify_ticket(llm: LLMClient, message: str, *, model: str | None = None,
+                          prompt: str | None = None,
                           conversation_id: str | None = None) -> TicketClassification:
+    settings = get_settings()
+    model = model or settings.classify_model or settings.fast_model
     messages = [
-        {"role": "system", "content": load_prompt("classify").text},
+        {"role": "system", "content": load_prompt(prompt or settings.classify_prompt).text},
         {"role": "user", "content": message},
     ]
     for attempt in range(2):
         result = await llm.chat(
             messages,
-            model=model or get_settings().fast_model,
+            model=model,
             json_schema=SCHEMA,
             temperature=0,
             purpose="classify",

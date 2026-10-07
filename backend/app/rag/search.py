@@ -104,6 +104,7 @@ async def search(
     top_k: int | None = None,
     reranker: str | None = None,
     settings: Settings | None = None,
+    query_vector: list[float] | None = None,
 ) -> list[Hit]:
     s = settings or get_settings()
     mode = mode or s.retrieval_mode
@@ -113,7 +114,8 @@ async def search(
     vector_hits: list[Hit] = []
     keyword_hits: list[Hit] = []
     if mode in ("vector", "hybrid"):
-        [query_vector] = await llm.embed([query])
+        if query_vector is None:
+            [query_vector] = await llm.embed([query])
         vector_hits = await vector_search(query_vector, s.candidates)
     if mode in ("keyword", "hybrid"):
         keyword_hits = await keyword_search(query, s.candidates)

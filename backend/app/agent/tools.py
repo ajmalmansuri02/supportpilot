@@ -37,6 +37,8 @@ class AgentContext:
     conversation_id: str | None = None
     emit: Emit = lambda event: None
     tool_calls: list[dict] = field(default_factory=list)  # audit trail for this turn
+    # Emails the customer typed in this conversation; None = no restriction (scripts, tests).
+    allowed_emails: set[str] | None = None
 
 
 Handler = Callable[[dict[str, Any], AgentContext], Awaitable[Any]]
@@ -213,10 +215,18 @@ class ToolRegistry:
         Errors are returned to the model as data instead of raised, so it can recover
         (ask for the missing email, try another invoice...) rather than crash.
         """
+        from app.guardrails import email_allowed, log_event
+
         tool = self.tools.get(call.name)
         args = dict(call.arguments)
-        if tool is None:
-            result: Any = {"error": f"Unknown tool {call.name}. Available: {sorted(self.tools)}"}
+        email = args.get("email") or args.get("customer_email")
+        if tool is not None and not email_allowed(email, ctx.allowed_emails):
+            result: Any = {"error": "For privacy, only the account whose email the customer gave "
+                                    "in this chat can be used. Ask the customer for their email."}
+            if ctx.conversation_id:
+                await log_event(ctx.conversation_id, "tool_denied", f"{call.name} for {email}")
+        elif tool is None:
+            result = {"error": f"Unknown tool {call.name}. Available: {sorted(self.tools)}"}
         elif missing := [r for r in tool.spec()["function"]["parameters"]["required"] if not args.get(r)]:
             result = {"error": f"Missing required arguments: {missing}"}
         else:
