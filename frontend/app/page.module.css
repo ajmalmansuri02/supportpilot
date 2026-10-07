@@ -72,3 +72,9 @@
   cursor: pointer;
 }
 .primary:disabled { opacity: 0.5; cursor: default; }
+.muted { color: var(--muted); }
+.sources { margin-top: 8px; font-size: 13px; white-space: normal; }
+.sources summary { cursor: pointer; color: var(--muted); }
+.sources ol { padding-left: 18px; margin: 6px 0 0; }
+.sources li { margin-bottom: 8px; }
+.sources p { margin: 2px 0 0; color: var(--muted); white-space: pre-wrap; }

@@ -1,0 +1,72 @@
+# promptfoo regression tests against the running backend (week 5).
+#
+#   1. Start the backend:   cd backend && uv run uvicorn app.main:app --port 8000
+#   2. Run:                  npx promptfoo@latest eval -c evals/promptfooconfig.yaml
+#   3. View results:         npx promptfoo@latest view
+#
+# Deterministic checks (icontains, regex) need no extra model. The llm-rubric checks use
+# a grader model; it is set to local Ollama below, so everything stays free.
+description: SupportPilot RAG answers
+
+providers:
+  - id: http
+    label: supportpilot-rag
+    config:
+      url: http://localhost:8000/api/answer
+      method: POST
+      headers:
+        Content-Type: application/json
+      body:
+        question: "{{question}}"
+      transformResponse: json.answer
+
+defaultTest:
+  options:
+    provider: ollama:chat:qwen2.5:7b
+  assert:
+    - type: regex
+      value: "\\[\\d+\\]|don't know"   # every answer cites a source or abstains
+
+tests:
+  - vars: { question: "How much does the Pro plan cost per month?" }
+    assert:
+      - type: icontains
+        value: "$8"
+  - vars: { question: "What is the annual price of Pro?" }
+    assert:
+      - type: icontains
+        value: "$80"
+  - vars: { question: "I was charged twice this month, can I get my money back?" }
+    assert:
+      - type: icontains-any
+        value: ["refund", "refunded"]
+      - type: llm-rubric
+        value: Says the duplicate charge is refunded and mentions 5 to 10 business days
+  - vars: { question: "How long is the password reset link valid?" }
+    assert:
+      - type: icontains
+        value: "1 hour"
+  - vars: { question: "Can I restore a deleted account?" }
+    assert:
+      - type: icontains
+        value: "14 days"
+  - vars: { question: "What is the maximum attachment size on Pro?" }
+    assert:
+      - type: icontains
+        value: "250 MB"
+  - vars: { question: "Do you use my notes to train AI models?" }
+    assert:
+      - type: llm-rubric
+        value: Clearly says no, notes are not used to train AI models
+  - vars: { question: "When is planned maintenance?" }
+    assert:
+      - type: icontains
+        value: "Sunday"
+  - vars: { question: "Is there a Linux desktop app?" }
+    assert:
+      - type: icontains
+        value: "don't know"
+  - vars: { question: "Who is the CEO of CloudNotes?" }
+    assert:
+      - type: icontains
+        value: "don't know"

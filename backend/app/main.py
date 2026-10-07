@@ -22,6 +22,8 @@ from app import chat, db, memory
 from app.classify import TicketClassification, classify_ticket
 from app.config import get_settings
 from app.llm import get_llm
+from app.rag.ingest import DEFAULT_DOCS, ingest_folder
+from app.rag.search import search
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("supportpilot")
@@ -31,8 +33,23 @@ log = logging.getLogger("supportpilot")
 async def lifespan(app: FastAPI):
     await db.open_pool()
     await db.init_schema()
+    if get_settings().auto_ingest:
+        await _ingest_if_empty()
     yield
     await db.close_pool()
+
+
+async def _ingest_if_empty() -> None:
+    """First run convenience: load data/docs if the knowledge base is empty."""
+    async with db.pool().connection() as conn:
+        row = await (await conn.execute("SELECT count(*) AS n FROM chunks")).fetchone()
+    if row["n"] == 0 and DEFAULT_DOCS.exists():
+        log.info("Knowledge base is empty, ingesting %s", DEFAULT_DOCS)
+        try:
+            log.info("Ingested: %s", await ingest_folder(DEFAULT_DOCS, get_llm()))
+        except Exception:
+            log.exception("Auto-ingest failed. Is the embedding model running? "
+                          "Run `uv run python -m app.rag.ingest` once it is.")
 
 
 app = FastAPI(title="SupportPilot", version="0.1.0", lifespan=lifespan)
@@ -47,7 +64,13 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     conversation_id: str | None = None
-    mode: Literal["chat"] = "chat"
+    mode: Literal["chat", "rag"] = "rag"
+
+
+class AnswerRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=4000)
+    retrieval_mode: Literal["vector", "keyword", "hybrid"] | None = None
+    reranker: Literal["none", "cross_encoder"] | None = None
 
 
 class ClassifyRequest(BaseModel):
@@ -81,7 +104,7 @@ async def chat_endpoint(req: ChatRequest):
     if not _is_uuid(conversation_id) or not await memory.conversation_exists(conversation_id):
         conversation_id = await memory.create_conversation()
 
-    handlers = {"chat": chat.simple_chat}
+    handlers = {"chat": chat.simple_chat, "rag": chat.rag_chat}
 
     async def events() -> AsyncIterator[str]:
         yield sse({"type": "meta", "conversation_id": conversation_id, "mode": req.mode})
@@ -107,3 +130,19 @@ async def conversation_endpoint(conversation_id: str):
     if conv is None:
         raise HTTPException(404, "Conversation not found")
     return conv
+
+
+@app.get("/api/search")
+async def search_endpoint(q: str, mode: Literal["vector", "keyword", "hybrid"] | None = None,
+                          k: int = 5):
+    """Debug retrieval: see exactly which chunks a question pulls back."""
+    hits = await search(get_llm(), q, mode=mode, top_k=k)
+    return [h.to_dict() for h in hits]
+
+
+@app.post("/api/answer")
+async def answer_endpoint(req: AnswerRequest):
+    """Non-streaming RAG answer without memory, for evals and scripts (e.g. promptfoo)."""
+    return await chat.answer_question(
+        get_llm(), req.question, mode=req.retrieval_mode, reranker=req.reranker
+    )

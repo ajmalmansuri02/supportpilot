@@ -130,6 +130,8 @@ class FakeLLM:
     def _answer(self, messages) -> str:
         system = _system(messages)
         user = _last(messages, "user")
+        if "standalone search query" in system:
+            return user.rsplit("Latest message:", 1)[-1].strip()
         if "summar" in system.lower():
             return "Summary: " + " ".join(user.split()[:60])
         chunks = re.findall(r"\[(\d+)\][^\n]*\n(.*?)(?=\n\[\d+\]|\n</context>)", system + "\n", re.DOTALL)
@@ -162,9 +164,15 @@ class FakeLLM:
                 "priority": "high" if urgent else "medium",
                 "sentiment": "negative" if angry or urgent else "neutral",
             }
-        if "score" in props:  # LLM-as-judge for evals: score by word overlap
-            score = round(min(1.0, _overlap(text.split("ANSWER:")[-1], text) + 0.1), 2)
-            return {"score": score, "reason": "offline judge: word overlap"}
+        if "score" in props:  # LLM-as-judge for evals, approximated by word overlap
+            answer = text.rsplit("ANSWER:", 1)[-1]
+            if "REFERENCE:" in text:  # correctness: how much of the reference is in the answer
+                reference = text.split("REFERENCE:", 1)[1].split("ANSWER:", 1)[0]
+                score = _overlap(reference, answer)
+            else:  # faithfulness: how much of the answer is in the excerpts
+                excerpts = text.split("EXCERPTS:", 1)[-1].rsplit("ANSWER:", 1)[0]
+                score = 1.0 if "don't know" in answer.lower() else _overlap(answer, excerpts)
+            return {"score": round(score, 2), "reason": "offline judge: word overlap"}
         return {k: _default(v) for k, v in props.items()}
 
 

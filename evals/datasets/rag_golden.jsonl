@@ -1,0 +1,55 @@
+{"id": "q01", "question": "How much does the Pro plan cost per month?", "expected": "$8 per month.", "sources": ["plans-and-pricing.md"], "answerable": true}
+{"id": "q02", "question": "What is the annual price of Pro?", "expected": "$80 per year when billed annually.", "sources": ["plans-and-pricing.md"], "answerable": true}
+{"id": "q03", "question": "How much is the Team plan per user?", "expected": "$15 per user per month, or $150 per user per year.", "sources": ["plans-and-pricing.md"], "answerable": true}
+{"id": "q04", "question": "What is the minimum number of users on the Team plan?", "expected": "3 users.", "sources": ["plans-and-pricing.md"], "answerable": true}
+{"id": "q05", "question": "How many devices can I use on the free plan?", "expected": "Up to 2 devices.", "sources": ["plans-and-pricing.md"], "answerable": true}
+{"id": "q06", "question": "Do students get a discount?", "expected": "Yes, 50% off Pro with a valid school email address.", "sources": ["plans-and-pricing.md"], "answerable": true}
+{"id": "q07", "question": "Can I combine the student discount with the non-profit discount?", "expected": "No, discounts cannot be combined.", "sources": ["plans-and-pricing.md"], "answerable": true}
+{"id": "q08", "question": "Does the Team plan support SSO?", "expected": "Yes, SSO with Google Workspace and Microsoft Entra ID.", "sources": ["plans-and-pricing.md"], "answerable": true}
+{"id": "q09", "question": "How long is version history kept on Pro?", "expected": "1 year.", "sources": ["plans-and-pricing.md"], "answerable": true}
+{"id": "q10", "question": "Which payment methods do you accept?", "expected": "Visa, Mastercard, American Express and PayPal; UPI in India for annual plans.", "sources": ["billing-and-payments.md"], "answerable": true}
+{"id": "q11", "question": "Can I pay with UPI?", "expected": "Yes, in India, for annual plans.", "sources": ["billing-and-payments.md"], "answerable": true}
+{"id": "q12", "question": "What happens if my payment fails?", "expected": "It is retried three times over 7 days; if all fail the account moves to the Free plan and nothing is deleted.", "sources": ["billing-and-payments.md"], "answerable": true}
+{"id": "q13", "question": "Where can I download my invoices?", "expected": "Settings > Billing > Invoices, as a PDF.", "sources": ["billing-and-payments.md"], "answerable": true}
+{"id": "q14", "question": "How do I add my company's tax ID to invoices?", "expected": "Enter it under Settings > Billing > Billing details.", "sources": ["billing-and-payments.md"], "answerable": true}
+{"id": "q15", "question": "How much GST is charged in India?", "expected": "18% GST.", "sources": ["billing-and-payments.md"], "answerable": true}
+{"id": "q16", "question": "I was charged twice this month, can I get my money back?", "expected": "Yes, the duplicate charge is fully refunded; contact support with the invoice numbers. It takes 5 to 10 business days.", "sources": ["refunds.md"], "answerable": true}
+{"id": "q17", "question": "How long does a refund take to reach my card?", "expected": "5 to 10 business days.", "sources": ["refunds.md"], "answerable": true}
+{"id": "q18", "question": "Can I get a refund on my annual plan after 2 weeks?", "expected": "Yes, annual plans are fully refundable within 30 days of the charge.", "sources": ["refunds.md"], "answerable": true}
+{"id": "q19", "question": "Do you refund partial months on monthly plans?", "expected": "No, monthly plans are not refunded for partial months; you keep access until the end of the month.", "sources": ["refunds.md"], "answerable": true}
+{"id": "q20", "question": "Who approves refunds over $100?", "expected": "A billing specialist, which can take up to 2 business days.", "sources": ["refunds.md"], "answerable": true}
+{"id": "q21", "question": "How do I cancel my subscription?", "expected": "Settings > Billing > Cancel subscription; the plan stays active until the end of the paid period, then moves to Free.", "sources": ["cancel-or-change-plan.md"], "answerable": true}
+{"id": "q22", "question": "Are my notes deleted when I cancel?", "expected": "No, notes are never deleted when you cancel.", "sources": ["cancel-or-change-plan.md"], "answerable": true}
+{"id": "q23", "question": "When does a downgrade take effect?", "expected": "At the end of the current billing period.", "sources": ["cancel-or-change-plan.md"], "answerable": true}
+{"id": "q24", "question": "If I upgrade to Pro, when does it start?", "expected": "Immediately, with a prorated charge for the rest of the period.", "sources": ["cancel-or-change-plan.md"], "answerable": true}
+{"id": "q25", "question": "Can I switch from annual to monthly billing right away?", "expected": "No, it takes effect when the annual period ends.", "sources": ["cancel-or-change-plan.md"], "answerable": true}
+{"id": "q26", "question": "I forgot my password, what do I do?", "expected": "Select Forgot password on the login screen; the reset link expires after 1 hour.", "sources": ["account-and-login.md"], "answerable": true}
+{"id": "q27", "question": "How long is the password reset link valid?", "expected": "1 hour.", "sources": ["account-and-login.md"], "answerable": true}
+{"id": "q28", "question": "How do I enable two-factor authentication?", "expected": "Settings > Security; authenticator apps and hardware security keys are supported.", "sources": ["account-and-login.md"], "answerable": true}
+{"id": "q29", "question": "I lost my 2FA phone and backup codes. How do I get back in?", "expected": "Contact support; recovery takes 3 business days and requires identity verification.", "sources": ["account-and-login.md"], "answerable": true}
+{"id": "q30", "question": "My account is locked after too many login attempts. What now?", "expected": "Wait 30 minutes or reset your password.", "sources": ["account-and-login.md"], "answerable": true}
+{"id": "q31", "question": "Can I restore a deleted account?", "expected": "Yes, within 14 days by contacting support.", "sources": ["delete-account.md"], "answerable": true}
+{"id": "q32", "question": "How do I delete my account?", "expected": "Settings > Account > Delete account and confirm with your password.", "sources": ["delete-account.md"], "answerable": true}
+{"id": "q33", "question": "Can a Team member delete their own account?", "expected": "No, they must ask their team admin to remove them.", "sources": ["delete-account.md"], "answerable": true}
+{"id": "q34", "question": "How do I export all my notes?", "expected": "Settings > Data > Export all; a download link is emailed, valid for 7 days.", "sources": ["export-and-import.md"], "answerable": true}
+{"id": "q35", "question": "Can I export to PDF on the free plan?", "expected": "No, PDF and Word export are Pro and Team features; Markdown export is on all plans.", "sources": ["export-and-import.md"], "answerable": true}
+{"id": "q36", "question": "Can I import my notes from Evernote?", "expected": "Yes, from .enex files via Settings > Data > Import.", "sources": ["export-and-import.md"], "answerable": true}
+{"id": "q37", "question": "My notes are not syncing, what should I check?", "expected": "Same account on every device, internet connection, force sync, update the app, the Free plan 2-device limit, sign out and in.", "sources": ["sync-troubleshooting.md"], "answerable": true}
+{"id": "q38", "question": "What does a note with (conflict) in the name mean?", "expected": "The note was edited on two devices while one was offline; both versions are kept to merge by hand.", "sources": ["sync-troubleshooting.md"], "answerable": true}
+{"id": "q39", "question": "Can I use notebooks offline on my phone with the free plan?", "expected": "No, full offline notebooks on mobile are a Pro and Team feature; recently opened notes are cached.", "sources": ["offline-and-mobile.md"], "answerable": true}
+{"id": "q40", "question": "Which Android version do I need?", "expected": "Android 10 and later.", "sources": ["offline-and-mobile.md"], "answerable": true}
+{"id": "q41", "question": "Can I password protect a shared link?", "expected": "Yes, on Pro and Team plans.", "sources": ["sharing-and-teams.md"], "answerable": true}
+{"id": "q42", "question": "How far back does the admin audit log go?", "expected": "90 days.", "sources": ["sharing-and-teams.md"], "answerable": true}
+{"id": "q43", "question": "What is the maximum attachment size on Pro?", "expected": "250 MB.", "sources": ["storage-and-attachments.md"], "answerable": true}
+{"id": "q44", "question": "Do notes in the Trash count towards my storage?", "expected": "Yes, for 30 days until the Trash is emptied.", "sources": ["storage-and-attachments.md"], "answerable": true}
+{"id": "q45", "question": "Do you use my notes to train AI models?", "expected": "No.", "sources": ["security-and-privacy.md"], "answerable": true}
+{"id": "q46", "question": "Can my team keep data only in the EU?", "expected": "Yes, Team plans can choose EU-only storage when the team is created.", "sources": ["security-and-privacy.md"], "answerable": true}
+{"id": "q47", "question": "Is the Slack integration available on the free plan?", "expected": "No, integrations are Pro and Team only, except Google Calendar.", "sources": ["integrations.md"], "answerable": true}
+{"id": "q48", "question": "How fast does Pro support reply?", "expected": "Within 24 hours, 7 days a week.", "sources": ["contact-support.md"], "answerable": true}
+{"id": "q49", "question": "When is planned maintenance?", "expected": "Sundays between 02:00 and 04:00 UTC.", "sources": ["contact-support.md"], "answerable": true}
+{"id": "q50", "question": "How much storage does the Team plan include?", "expected": "1 TB of pooled storage per team.", "sources": ["plans-and-pricing.md", "storage-and-attachments.md"], "answerable": true}
+{"id": "q51", "question": "Is there a Linux desktop app?", "expected": "", "sources": [], "answerable": false}
+{"id": "q52", "question": "Does CloudNotes have a browser extension?", "expected": "", "sources": [], "answerable": false}
+{"id": "q53", "question": "What is CloudNotes' phone number?", "expected": "", "sources": [], "answerable": false}
+{"id": "q54", "question": "Who is the CEO of CloudNotes?", "expected": "", "sources": [], "answerable": false}
+{"id": "q55", "question": "What's the weather like in Mumbai today?", "expected": "", "sources": [], "answerable": false}
