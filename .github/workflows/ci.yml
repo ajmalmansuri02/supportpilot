@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: supportpilot
+          POSTGRES_PASSWORD: supportpilot
+          POSTGRES_DB: supportpilot
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U supportpilot" --health-interval 3s --health-retries 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      LLM_PROVIDER: fake
+      EMBED_PROVIDER: fake
+      DATABASE_URL: postgresql://supportpilot:supportpilot@localhost:5432/supportpilot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --extra dev
+      - run: uv run ruff check .
+      - run: uv run pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
