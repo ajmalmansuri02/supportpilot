@@ -31,6 +31,24 @@ jobs:
       - run: uv sync --extra dev
       - run: uv run ruff check .
       - run: uv run pytest -q
+      # Week 5: fail the build if retrieval or answer quality regresses.
+      # Uses the offline fake model, so it checks the pipeline, not model quality.
+      - name: RAG eval regression gate
+        env:
+          RAG_MIN_SIMILARITY: "0.2"
+        run: |
+          uv run python -m app.rag.ingest
+          uv run python -m app.evals.rag_eval --tag ci --baseline ../evals/baseline-fake.json
+      # Week 7: agent scenarios (right tools, no forbidden tools, approvals, escalation).
+      - name: Agent eval regression gate
+        env:
+          RAG_MIN_SIMILARITY: "0.2"
+        run: uv run python -m app.evals.agent_eval --tag ci --baseline ../evals/baseline-fake-agent.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rag-eval-results
+          path: evals/results/*.json
 
   frontend:
     runs-on: ubuntu-latest

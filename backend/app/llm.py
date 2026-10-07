@@ -229,7 +229,12 @@ class LLMClient:
         self._record(purpose, model, usage, started, conversation_id)
 
     # -- embeddings ------------------------------------------------------------
-    async def embed(self, texts: list[str], *, batch_size: int = 32) -> list[list[float]]:
+    async def embed(self, texts: list[str], *, kind: str = "query",
+                    batch_size: int = 32) -> list[list[float]]:
+        """Embed texts. `kind` is "query" (a question) or "document" (a chunk to search)."""
+        prefix = (self.settings.embed_query_prefix if kind == "query"
+                  else self.settings.embed_document_prefix)
+        texts = [prefix + t for t in texts]
         if self._embed_client is None:
             return [self._fake.embed(t) for t in texts]
         vectors: list[list[float]] = []

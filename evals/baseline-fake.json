@@ -1,0 +1,12 @@
+{
+  "tag": "fake-hybrid",
+  "summary": {
+    "hit_rate": 0.96,
+    "mrr": 0.917,
+    "correctness": 0.568,
+    "faithfulness": 0.979,
+    "citation_rate": 1.0,
+    "abstain_ok": 1,
+    "false_abstain": 0.04
+  }
+}

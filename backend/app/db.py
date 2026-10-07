@@ -43,7 +43,8 @@ def pool() -> AsyncConnectionPool:
 
 async def init_schema() -> None:
     async with pool().connection() as conn:
-        await conn.execute(SCHEMA.read_text())
+        sql = SCHEMA.read_text().replace("{embed_dim}", str(get_settings().embed_dim))
+        await conn.execute(sql)
 
 
 def to_vector(values: list[float]) -> str:

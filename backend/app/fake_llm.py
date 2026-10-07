@@ -71,65 +71,69 @@ class FakeLLM:
             return ChatResult(content=json.dumps(self._json(messages, json_schema)))
         if tools:
             names = {t["function"]["name"] for t in tools}
-            planned = self._plan(messages, names)
-            done = [m for m in messages if m.get("role") == "tool"]
-            if len(done) < len(planned):
-                name, args = planned[len(done)]
-                call = ToolCall(id=f"call_{len(done)}", name=name, arguments=args)
+            turn = _current_turn(messages)
+            action = self._next_action(_last(messages, "user"), turn, names)
+            if action:
+                name, args = action
+                call = ToolCall(id=f"call_{len(turn)}", name=name, arguments=args)
                 return ChatResult(content="", tool_calls=[call])
-            return ChatResult(content=self._final_from_tools(messages))
+            return ChatResult(content=self._final_from_tools(messages, turn))
         return ChatResult(content=self._answer(messages))
 
-    def _plan(self, messages, names: set[str]) -> list[tuple[str, dict]]:
-        user = _last(messages, "user")
+    def _next_action(self, user: str, turn: dict[str, Any], names: set[str]):
+        """Pick the next tool call from simple keyword rules and earlier results."""
         low = user.lower()
         if any(h in low for h in INJECTION_HINTS):
-            return []
-        plan: list[tuple[str, dict]] = []
+            return None
         email = _EMAIL.search(user)
+        billing = re.search(r"refund|charged twice|double charge|billing|invoice|charge", low)
         if re.search(r"\b(human|person|manager|escalat)", low) and "escalate_to_human" in names:
-            return [("escalate_to_human", {"reason": user[:200]})]
-        if email and "get_account" in names:
-            plan.append(("get_account", {"email": email.group(0)}))
-        if re.search(r"refund|charged twice|double charge|billing|invoice|ticket", low) and (
-            "create_ticket" in names
-        ):
-            plan.append((
-                "create_ticket",
-                {
-                    "subject": user[:80],
-                    "description": user,
-                    "category": "billing" if "refund" in low or "charge" in low else "other",
-                    "priority": "high" if "twice" in low else "medium",
-                    "customer_email": email.group(0) if email else None,
-                },
-            ))
-        if not plan and "search_docs" in names:
-            plan.append(("search_docs", {"query": user}))
-        return plan
+            return None if "escalate_to_human" in turn else ("escalate_to_human", {"reason": user[:200]})
+        if email and "get_account" in names and "get_account" not in turn:
+            return ("get_account", {"email": email.group(0)})
+        if billing and email:
+            account = turn.get("get_account") or {}
+            dup = _duplicate_invoice(account.get("invoices", []))
+            if dup and "issue_refund" in names and "issue_refund" not in turn:
+                return ("issue_refund", {"invoice_id": dup, "customer_email": email.group(0),
+                                         "reason": "Duplicate charge; refund policy allows a full refund"})
+            if not dup and "create_ticket" in names and "create_ticket" not in turn:
+                return ("create_ticket", {
+                    "subject": user[:80], "description": user, "category": "billing",
+                    "priority": "medium", "customer_email": email.group(0)})
+            return None
+        if not email and "search_docs" in names and "search_docs" not in turn:
+            return ("search_docs", {"query": user})
+        return None
 
-    def _final_from_tools(self, messages) -> str:
+    def _final_from_tools(self, messages, turn: dict[str, Any]) -> str:
         user = _last(messages, "user").lower()
         if any(h in user for h in INJECTION_HINTS):
             return "I can only help with CloudNotes support questions."
-        results = [m["content"] for m in messages if m.get("role") == "tool"]
-        for raw in results:
-            try:
-                data = json.loads(raw)
-            except (json.JSONDecodeError, TypeError):
-                continue
-            if isinstance(data, dict) and data.get("results"):
-                top = data["results"][0]
-                return f"{_first_sentences(top.get('content', ''))} [1]"
-            if isinstance(data, dict) and data.get("ticket_id"):
-                return f"I've opened ticket #{data['ticket_id']} and our team will follow up."
-            if isinstance(data, dict) and data.get("escalated"):
-                return "I've passed this to a human agent who will reply shortly."
+        if refund := turn.get("issue_refund"):
+            if refund.get("status") == "awaiting_approval":
+                return ("I found a duplicate charge on your account and asked a support agent "
+                        "to approve the refund. You'll see the update here once it's reviewed.")
+            return f"I couldn't request that refund: {refund.get('error')}"
+        if (esc := turn.get("escalate_to_human")) and esc.get("escalated"):
+            return "I've passed this to a human agent who will reply shortly."
+        if (ticket := turn.get("create_ticket")) and ticket.get("ticket_id"):
+            return f"I've opened ticket #{ticket['ticket_id']} and our team will follow up."
+        if (docs := turn.get("search_docs")) and docs.get("results"):
+            return f"{_first_sentences(docs['results'][0].get('content', ''))} [1]"
+        if (account := turn.get("get_account")) and account.get("plan"):
+            return f"Your account is on the {account['plan'].title()} plan."
+        if "get_account" in turn:
+            return "I couldn't find an account with that email. Could you check it?"
+        if "@" not in user and re.search(r"charge|refund|invoice|bill", user):
+            return "I can look into that. What's the email address on your CloudNotes account?"
         return "I couldn't find enough information to answer that."
 
     def _answer(self, messages) -> str:
         system = _system(messages)
         user = _last(messages, "user")
+        if "standalone search query" in system:
+            return user.rsplit("Latest message:", 1)[-1].strip()
         if "summar" in system.lower():
             return "Summary: " + " ".join(user.split()[:60])
         chunks = re.findall(r"\[(\d+)\][^\n]*\n(.*?)(?=\n\[\d+\]|\n</context>)", system + "\n", re.DOTALL)
@@ -162,9 +166,15 @@ class FakeLLM:
                 "priority": "high" if urgent else "medium",
                 "sentiment": "negative" if angry or urgent else "neutral",
             }
-        if "score" in props:  # LLM-as-judge for evals: score by word overlap
-            score = round(min(1.0, _overlap(text.split("ANSWER:")[-1], text) + 0.1), 2)
-            return {"score": score, "reason": "offline judge: word overlap"}
+        if "score" in props:  # LLM-as-judge for evals, approximated by word overlap
+            answer = text.rsplit("ANSWER:", 1)[-1]
+            if "REFERENCE:" in text:  # correctness: how much of the reference is in the answer
+                reference = text.split("REFERENCE:", 1)[1].split("ANSWER:", 1)[0]
+                score = _overlap(reference, answer)
+            else:  # faithfulness: how much of the answer is in the excerpts
+                excerpts = text.split("EXCERPTS:", 1)[-1].rsplit("ANSWER:", 1)[0]
+                score = 1.0 if "don't know" in answer.lower() else _overlap(answer, excerpts)
+            return {"score": round(score, 2), "reason": "offline judge: word overlap"}
         return {k: _default(v) for k, v in props.items()}
 
 
@@ -174,6 +184,31 @@ def _default(prop: dict) -> Any:
     return {"string": "", "number": 0, "integer": 0, "boolean": False, "array": []}.get(
         prop.get("type"), None
     )
+
+
+def _current_turn(messages) -> dict[str, Any]:
+    """Map tool name -> parsed result for tool calls made since the last user message."""
+    idx = max((i for i, m in enumerate(messages) if m.get("role") == "user"), default=-1)
+    names, results = {}, {}
+    for m in messages[idx + 1:]:
+        for call in m.get("tool_calls") or []:
+            names[call["id"]] = call["function"]["name"]
+        if m.get("role") == "tool":
+            try:
+                results[names.get(m["tool_call_id"], "?")] = json.loads(m["content"])
+            except (json.JSONDecodeError, TypeError):
+                results[names.get(m["tool_call_id"], "?")] = {}
+    return results
+
+
+def _duplicate_invoice(invoices: list[dict]) -> str | None:
+    """Return the later of two paid invoices with the same amount on the same day."""
+    paid = [i for i in invoices if i.get("status") == "paid"]
+    for a in paid:
+        for b in paid:
+            if a is not b and a["amount_usd"] == b["amount_usd"] and a["issued_at"][:10] == b["issued_at"][:10]:
+                return max(a, b, key=lambda i: i["issued_at"])["id"]
+    return None
 
 
 def _first_sentences(text: str, n: int = 2) -> str:

@@ -39,6 +39,32 @@ class Settings(BaseSettings):
     embed_provider: Provider = "ollama"
     embed_model: str = "nomic-embed-text"
     embed_dim: int = 768
+    # Some embedding models are trained with task prefixes. nomic-embed-text expects
+    # these; set both to "" for models that don't (e.g. Gemini embeddings).
+    embed_query_prefix: str = "search_query: "
+    embed_document_prefix: str = "search_document: "
+
+    # --- Retrieval (weeks 3-4) -------------------------------------------------
+    # "vector" = embeddings only, "keyword" = Postgres full-text only,
+    # "hybrid" = both, merged with Reciprocal Rank Fusion.
+    retrieval_mode: Literal["vector", "keyword", "hybrid"] = "hybrid"
+    top_k: int = 4                 # chunks given to the model
+    candidates: int = 20           # chunks fetched before fusion / reranking
+    # "none" or "cross_encoder" (needs `uv sync --extra rerank`, downloads ~90 MB once)
+    reranker: Literal["none", "cross_encoder"] = "none"
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    # Below this cosine similarity (and with no keyword match) we say "I don't know".
+    rag_min_similarity: float = 0.45
+    # Load data/docs automatically at startup if the knowledge base is empty.
+    auto_ingest: bool = True
+
+    # --- Agent (weeks 6-8) ----------------------------------------------------
+    # "graph" = LangGraph version (week 7), "loop" = plain Python loop (week 6).
+    agent_engine: Literal["graph", "loop"] = "graph"
+    # Get the ticket tools from the MCP server instead of calling them directly (week 8).
+    tickets_via_mcp: bool = False
+    # Load mock customers and invoices on startup if there are none.
+    auto_seed: bool = True
 
     llm_timeout_seconds: float = 120.0
     temperature: float = 0.2
